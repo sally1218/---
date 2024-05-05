@@ -58,7 +58,6 @@ async def on_message(message):
             )
             # 從response中提取文本內容
             response_text = response.choices[0].message.content
-            report_titles = response_text.split("\n")
             response = openai_client.images.generate(
                 model="dall-e-3",
                 prompt=report_topic,
@@ -123,12 +122,12 @@ def generate_pdf(direction, content, image_path, members_str,advisor_str, path):
 
     # 第二頁：内容
     c.setFont("ChineseFont", 12)
-    c.drawString(100, page_height - 80, "摘要：")
-    y = A4[1] - 50  
+    c.drawString(100, page_height - 100, "摘要：")
+    y = A4[1] - 80  
     for line in lines:
         if y < 100:  
             c.showPage()
-            y = A4[1] - 50
+            y = A4[1] - 80
         c.drawString(100, y, line)
         y -= line_height
 
