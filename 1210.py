@@ -12,7 +12,7 @@ import requests
 import textwrap
 
 # OpenAI API 金鑰
-openai_client = OpenAI(api_key="api_key")
+openai_client = OpenAI(api_key="my_api_key")
 
 # client是跟discord連接，intents是要求機器人的權限
 intents = discord.Intents.default()
@@ -70,7 +70,7 @@ async def on_message(message):
             responses['image_url'] = image_url
             responses['save_request'] = True
             responses['response_text'] = response_text
-            responses['report_topic'] = report_topic
+            responses['report_topic'] = report_topic            
             await message.channel.send("報告已生成，請提供存檔的路徑（絕對路徑），例如：存檔 C:/Users/User/Documents/")
         except OpenAIError as e:
             # 處理可能的 OpenAI 連線錯誤
@@ -88,7 +88,9 @@ async def on_message(message):
             image = Image.open(BytesIO(image_data))
             temp_image_path = f"{path}temp_image.png"
             image.save(temp_image_path)
-            generate_pdf(report_topic, response_text, temp_image_path, path)
+            members_str = "組員: 蘇德恩、王品蓉、陳培昕" 
+            advisor_str = "指導老師: 鄞宗賢"
+            generate_pdf(report_topic, response_text, temp_image_path,members_str, advisor_str,path)
             responses['save_request'] = False
             await message.channel.send("報告已成功儲存至指定路徑。")
             await message.channel.send(file=discord.File(f"{path}response.pdf"))
@@ -99,7 +101,7 @@ async def on_message(message):
         pass
 
 # 生成 PDF 的函數
-def generate_pdf(direction, content, image_path, path):
+def generate_pdf(direction, content, image_path, members_str,advisor_str, path):
     # 處理文本換行
     lines = textwrap.wrap(content, width=30)
     # 設定行高
@@ -108,37 +110,40 @@ def generate_pdf(direction, content, image_path, path):
     text_height = len(lines) * line_height
     # 計算頁面總高度
     page_height = text_height + 800
-    
     # 創建 PDF 並設定頁面大小
-    c = canvas.Canvas(f"{path}response.pdf", pagesize=(A4[0], page_height))
-    # 設定使用的字體
+    c = canvas.Canvas(f"{path}response.pdf", pagesize=(A4[0], A4[1]))
+
+    # 第一頁：標題和作者
+    c.setFont("ChineseFont", 24)
+    c.drawCentredString(A4[0] // 2, A4[1] - 50, direction)
     c.setFont("ChineseFont", 12)
-    # 寫入 PDF 標題和摘要
-    c.drawString(100, page_height - 50, "標題：")
-    c.drawString(150, page_height - 50, direction)
+    c.drawString(100, 100, members_str)
+    c.drawRightString(A4[0] - 100, 100, advisor_str)
+    c.showPage()
+
+    # 第二頁：内容
+    c.setFont("ChineseFont", 12)
     c.drawString(100, page_height - 80, "摘要：")
-    
-    # 設定寫入文本的起始位置
-    text_x = 100
-    text_y = page_height - 80 - line_height
-    # 遍歷每行文本並寫入 PDF
+    y = A4[1] - 50  
     for line in lines:
-        c.drawString(text_x, text_y, line)
-        text_y -= line_height
-    
-    # 調整圖像大小
+        if y < 100:  
+            c.showPage()
+            y = A4[1] - 50
+        c.drawString(100, y, line)
+        y -= line_height
+
+    # 調整圖像大小並在第二頁插入圖像
     image = Image.open(image_path)
     image_width, image_height = image.size
     max_image_width = A4[0] - 200
-    max_image_height = page_height - 200 - text_height
+    max_image_height = A4[1] - 200
     if image_width > max_image_width or image_height > max_image_height:
         ratio = min(max_image_width / image_width, max_image_height / image_height)
         image = image.resize((int(image_width * ratio), int(image_height * ratio)))
-    # Draw image on PDF
     c.drawImage(image_path, 100, 100, width=image.size[0], height=image.size[1])
-
+  
     # 保存 PDF 文件
     c.save()
     os.remove(image_path)
 
-client.run("discord bot key!")
+client.run("discord bot key")
