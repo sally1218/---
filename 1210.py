@@ -12,7 +12,7 @@ import requests
 import textwrap
 
 # OpenAI API 金鑰
-openai_client = OpenAI(api_key="my_api_key")
+openai_client = OpenAI(api_key="api_key")
 
 # client是跟discord連接，intents是要求機器人的權限
 intents = discord.Intents.default()
@@ -58,6 +58,7 @@ async def on_message(message):
             )
             # 從response中提取文本內容
             response_text = response.choices[0].message.content
+            report_titles = response_text.split("\n")
             response = openai_client.images.generate(
                 model="dall-e-3",
                 prompt=report_topic,
@@ -90,7 +91,7 @@ async def on_message(message):
             generate_pdf(report_topic, response_text, temp_image_path, path)
             responses['save_request'] = False
             await message.channel.send("報告已成功儲存至指定路徑。")
-            await message.channel.send(file=discord.File('response.pdf'))
+            await message.channel.send(file=discord.File(f"{path}response.pdf"))
             return  
         else:
             pass
@@ -125,7 +126,7 @@ def generate_pdf(direction, content, image_path, path):
         c.drawString(text_x, text_y, line)
         text_y -= line_height
     
-    # Load and resize image
+    # 調整圖像大小
     image = Image.open(image_path)
     image_width, image_height = image.size
     max_image_width = A4[0] - 200
@@ -140,4 +141,4 @@ def generate_pdf(direction, content, image_path, path):
     c.save()
     os.remove(image_path)
 
-client.run("Your Discord Key!")
+client.run("discord bot key!")
