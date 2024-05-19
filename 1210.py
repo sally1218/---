@@ -13,7 +13,7 @@ import textwrap
 import re
 
 # OpenAI API 金鑰
-openai_client = OpenAI(api_key="my_api_key")
+openai_client = OpenAI(api_key="api_key")
 
 # client是跟discord連接，intents是要求機器人的權限
 intents = discord.Intents.default()
@@ -75,16 +75,25 @@ async def on_message(message):
     elif len(message_log) == 2:
         selected_index = int(message.content.strip()) - 1
         selected_topic = responses['report_titles'][selected_index]
-        await message.channel.send(f"你選擇的報告主題是：{selected_topic}。正在生成摘要，請稍後......")
+        await message.channel.send(f"你選擇的報告主題是：{selected_topic}。正在生成前言和實際應用案例，請稍後......")
         
         try:
             summary_response = openai_client.chat.completions.create(
                 model="gpt-4",
-                messages=[{"role": "user", "content": f"生成關於'{selected_topic}'的摘要"}],
+                messages=[{"role": "user", "content": f"生成關於'{selected_topic}'的前言"}],
             )
             summary = summary_response.choices[0].message.content
-            await message.channel.send(f"生成的摘要：\n{summary}")
+            await message.channel.send(f"前言：\n{summary}")
             responses['summary'] = summary
+
+            applications_response  = openai_client.chat.completions.create(
+                model="gpt-4",
+                messages=[{"role": "user", "content": f"生成關於'{selected_topic}'的實際應用案例"}],
+            )
+            applications = applications_response.choices[0].message.content
+            await message.channel.send(f"實際應用案例：\n{applications}")
+            responses['applications'] = applications
+
             await message.channel.send("你要進行存檔嗎？請回覆‘是’或‘否’。")
             responses['save_request'] = True  # 標記為需要等待存檔確認
             message_log.append(message.content)  # 更新日誌
@@ -95,29 +104,33 @@ async def on_message(message):
         # 使用者要存檔
         path = "D:/sally_school"  # 設置默認保存路徑
         response_text = responses['summary']
+        applications = responses['applications']
         report_topic = responses['report_topic']
         image_url = responses['image_url']
         image_data = requests.get(image_url).content
         image = Image.open(BytesIO(image_data))
         temp_image_path = f"{path}temp_image.png"
         image.save(temp_image_path)
-        members_str = "組員: 蘇德恩、王品蓉、陳培昕" 
-        advisor_str = "指導老師: 鄞宗賢"
-        generate_pdf(report_topic, response_text, temp_image_path, members_str, advisor_str,path)
+        members_str = "組員: 蘇德恩、王品蓉、陳培昕"
+        advisor_str = "指導老師: 鄞宗賢" 
+        generate_pdf(report_topic, response_text, applications, temp_image_path, members_str, advisor_str, path)
         await message.channel.send("檔案已成功儲存!")
         await message.channel.send(file=discord.File(f"{path}response.pdf"))
         responses['save_request'] = False  # 重置保存請求狀態
 
 # 生成 PDF 的函數
-def generate_pdf(direction, content, image_path, members_str,advisor_str,path):
+def generate_pdf(direction, summary, applications, image_path, members_str, advisor_str, path):
     # 使用正則表達式分割内容，确保每個點都在新的一行
-    lines = re.split(r'(?=\d+\.)', content.strip())  # 這會根據數字點（如1. 2.）分割文本
+    summary_lines = re.split(r'(?=\d+\.)', summary.strip())  # 這會根據數字點（如1. 2.）分割前言文本
+    applications_lines = re.split(r'(?=\d+\.)', applications.strip())  # 這會根據數字點（如1. 2.）分割實際應用案例文本
     # 設定行高
     line_height = 25
     # 計算文本總高度
-    text_height = len(lines) * line_height
+    summary_height = len(summary_lines) * line_height
+    applications_height = len(applications_lines) * line_height
     # 計算頁面總高度
-    page_height = text_height + 800
+    page_height = summary_height + applications_height + 1200
+
     
     # 創建 PDF 並設定頁面大小
     c = canvas.Canvas(f"{path}response.pdf", pagesize=(A4[0], page_height))
@@ -125,20 +138,31 @@ def generate_pdf(direction, content, image_path, members_str,advisor_str,path):
     c.setFont("ChineseFont", 24)
     c.drawCentredString(A4[0] // 2, A4[1] - 50, direction)
     c.setFont("ChineseFont", 12)
-    c.drawString(100, 100, members_str)
-    c.drawRightString(A4[0] - 100, 100, advisor_str)
+    c.drawCentredString(A4[0] // 2, A4[1] - 250, members_str)
+    c.drawCentredString(A4[0] // 2, A4[1] - 270, advisor_str)
     c.showPage()
     # 第二頁：内容
     c.setFont("ChineseFont", 12)
-    c.drawString(80, page_height - 80, "摘要：")
+    c.drawString(80, page_height - 80, "前言：")
     # 設定寫入文本的起始位置
     text_x = 100
     text_y = page_height - 80 - line_height
     # 遍歷每行文本並寫入 PDF
-    for line in lines:
+    for line in summary_lines:
         c.drawString(text_x, text_y, line)
         text_y -= line_height
     
+    # 寫入 PDF 實際應用案例標題
+    c.drawString(80, page_height - 80 - summary_height - 80, "實際應用案例：")
+
+    # 設定寫入實際應用案例文本的起始位置
+    text_x = 100
+    text_y = page_height - 80 - summary_height - 80 - line_height
+    # 遍歷每行實際應用案例文本並寫入 PDF
+    for line in applications_lines:
+        c.drawString(text_x, text_y, line)
+        text_y -= line_height
+
     # 調整圖像大小並在第二頁插入圖像
     image = Image.open(image_path)
     image_width, image_height = image.size
@@ -153,4 +177,4 @@ def generate_pdf(direction, content, image_path, members_str,advisor_str,path):
     c.save()
     os.remove(image_path)
 
-client.run("discord bot key")
+client.run("discord_bot_key")
