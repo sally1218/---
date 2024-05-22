@@ -138,8 +138,8 @@ def generate_pdf(direction, summary, applications, image_path, members_str, advi
     c.setFont("ChineseFont", 24)
     c.drawCentredString(A4[0] // 2, A4[1] - 50, direction)
     c.setFont("ChineseFont", 12)
-    c.drawCentredString(A4[0] // 2, A4[1] - 250, members_str)
-    c.drawCentredString(A4[0] // 2, A4[1] - 270, advisor_str)
+    c.drawCentredString(A4[0] // 2, A4[1] - 750, members_str)
+    c.drawCentredString(A4[0] // 2, A4[1] - 780, advisor_str)
     c.showPage()
     # 第二頁：内容
     c.setFont("ChineseFont", 12)
