@@ -10,6 +10,7 @@ from io import BytesIO
 import io
 import requests
 import textwrap
+import random
 import re
 
 # OpenAI API 金鑰
@@ -50,7 +51,7 @@ async def on_message(message):
         
         try:
             response = openai_client.chat.completions.create(
-                model="gpt-4", 
+                model="gpt-3.5-turbo", 
                 messages=[{"role": "user", "content": question_with_supplement}],
             )
             response_text = response.choices[0].message.content
@@ -79,7 +80,7 @@ async def on_message(message):
         
         try:
             summary_response = openai_client.chat.completions.create(
-                model="gpt-4",
+                model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": f"生成關於'{selected_topic}'的前言"}],
             )
             summary = summary_response.choices[0].message.content
@@ -95,7 +96,7 @@ async def on_message(message):
         intro_text = message.content
         try:
             intro_response = openai_client.chat.completions.create(
-                model="gpt-4",
+                model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": intro_text}],
             )
             revised_intro = intro_response.choices[0].message.content
@@ -104,12 +105,12 @@ async def on_message(message):
             
             # 提供實例和新聞連結
             examples_response = openai_client.chat.completions.create(
-                model="gpt-4",
-                messages=[{"role": "user", "content": f"提供三個關於'{responses['report_topic']}'的應用實例和一個新聞連結。"}],
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": f"提供三個關於'{responses['report_topic']}'的應用實例。"}],
             )
-            examples_and_link = examples_response.choices[0].message.content
-            await message.channel.send(f"相關實例和新聞連結：\n{examples_and_link}")
-            responses['examples_and_link'] = examples_and_link
+            examples = examples_response.choices[0].message.content
+            await message.channel.send(f"相關應用實例：\n{examples}")
+            responses['examples'] = examples
 
             await message.channel.send("你要進行存檔嗎？請回覆‘是’或‘否’。")
             message_log.append(message.content)  # 更新日誌
@@ -125,72 +126,86 @@ async def on_message(message):
         image = Image.open(BytesIO(image_data))
         temp_image_path = f"{path}temp_image.png"
         image.save(temp_image_path)
-        response_text = responses['summary']
-        members_str = "組員: 蘇德恩、王品蓉、陳培昕"
-        advisor_str = "指導老師: 鄞宗賢" 
-        generate_pdf(responses['report_topic'], responses['summary'], responses['revised_intro'], responses['examples_and_link'], temp_image_path,members_str,advisor_str, path)
+        generate_pdf(responses['report_topic'], responses['summary'], responses['revised_intro'], responses['examples'], temp_image_path, path)
         await message.channel.send("檔案已成功儲存!")
         await message.channel.send(file=discord.File(f"{path}response.pdf"))
         responses['save_request'] = False  # 重置保存請求狀態
 
 # 生成 PDF 的函數
-def generate_pdf(direction, summary, intro,examples_and_link, image_path, members_str, advisor_str, path):
+def generate_pdf(direction, summary, intro, examples, image_path, path):
     c = canvas.Canvas(f"{path}response.pdf", pagesize=A4)
     c.setFont("ChineseFont", 12)
     margin = 72
     page_width, page_height = A4
-    text_width = page_width - 2 * margin
     text_y = page_height - margin
 
-    # 寫入報告標題
-    c.setFont("ChineseFont", 24)
-    c.drawCentredString(A4[0] / 2, A4[1] - 100, direction)
+    # 隨機選擇背景圖片
+    bg_number = random.randint(1, 4)  # 生成1至4之間的隨機數
+    cover_image_path = f'D:/sally_school/專題四/bg{bg_number}.webp'  # 構建圖片路徑
+    cover_image = Image.open(cover_image_path)
+    cover_image_w, cover_image_h = cover_image.size
+    cover_scale = min(page_width / cover_image_w, page_height / cover_image_h)
+    cover_image = cover_image.resize((int(cover_image_w * cover_scale), int(cover_image_h * cover_scale)))
+    c.drawInlineImage(cover_image, 0, 0, width=page_width, height=page_height)
+
+    # 創建封面
+    c.setFont("ChineseFont", 18)
+    c.drawCentredString(page_width / 2, page_height - 300, f"報告標題：{direction}")
+    c.setFont("ChineseFont", 14)
+    c.drawCentredString(page_width / 2, page_height - 350, "組員名稱: 蘇德恩, 王品蓉, 陳培昕")
+    c.drawCentredString(page_width / 2, page_height - 400, "指導老師: 鄞老師")
+    c.showPage()  # 新增一頁來開始內文
+
+    # 寫入前言
+    c.setFont("ChineseFont", 16)  # 放大標題字體
+    c.drawString(margin, text_y, "前言：")
     text_y -= 30
     c.setFont("ChineseFont", 12)
-    c.drawCentredString(A4[0] / 2, A4[1] - 550, members_str)
-    c.drawCentredString(A4[0] / 2, A4[1] - 570, advisor_str)
-    c.showPage()
-    # 第二頁：内容
-    c.setFont("ChineseFont", 15)
-    c.drawString(margin,text_y, "前言：")
-    summary_lines = textwrap.wrap(summary, width=38)  # 自動換行
+    summary_lines = textwrap.wrap(summary, width=35)
     for line in summary_lines:
         text_y -= 15
-        c.setFont("ChineseFont", 12)
         c.drawString(margin, text_y, line)
 
-     # 新增空行
-    text_y -= 20
-    
+    text_y -= 30  # 增加更大的間距
+
     # 寫入內容介紹
-    c.setFont("ChineseFont", 15)
+    c.setFont("ChineseFont", 16)
     c.drawString(margin, text_y, "內容介紹：")
-    intro_lines = textwrap.wrap(intro, width=38)  # 自動換行
+    text_y -= 30
+    c.setFont("ChineseFont", 12)
+    intro_lines = textwrap.wrap(intro, width=35)
     for line in intro_lines:
         text_y -= 15
-        c.setFont("ChineseFont", 12)
         c.drawString(margin, text_y, line)
-
-    # 新增空行
-    text_y -= 20
-
-    # 寫入實例和新聞連結
-    c.setFont("ChineseFont", 15)
-    c.drawString(margin, text_y, "相關實例和新聞連結：")
-    text_y -= 15
-    for line in textwrap.wrap(examples_and_link, width=38):
-        c.setFont("ChineseFont", 12)
-        c.drawString(margin, text_y, line)
-        text_y -= 15
-
-    # 插入圖片
+    text_y -= 30
+    
+    # 處理並顯示圖片
     img = Image.open(image_path)
     img_width, img_height = img.size
-    scale = min(text_width / img_width, (text_y - margin) / img_height)
+    scale = min((page_width - 2 * margin) / img_width, (page_height - text_y - 200) / img_height, 0.25)  # 最大縮放比例為0.3
     img = img.resize((int(img_width * scale), int(img_height * scale)))
-    c.drawInlineImage(img, margin, text_y - img_height * scale, width=img_width * scale, height=img_height * scale)
+    c.drawInlineImage(img, margin, text_y - img.height - 20, width=img.width, height=img.height)
+    
+    text_y -= img.height + 50  # 調整 text_y 位置
+    
+    # 檢查是否有足夠空間顯示相關實例
+    if text_y < margin:
+        c.showPage()  # 新增一頁
+        text_y = page_height - margin
+    
+    # 處理實例
+    c.setFont("ChineseFont", 16)
+    c.drawString(margin, text_y, "相關實例：")
+    text_y -= 30
+    c.setFont("ChineseFont", 12)
+    example_lines = textwrap.wrap(examples, width=35)
+    for line in example_lines:  # 確保顯示所有行
+        if text_y < margin:
+            c.showPage()  # 新增一頁
+            text_y = page_height - margin
+        text_y -= 15
+        c.drawString(margin, text_y, line)
 
-    # 保存 PDF 文件
     c.save()
     os.remove(image_path)
 
